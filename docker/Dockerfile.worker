@@ -1,0 +1,38 @@
+FROM python:3.11-slim
+
+# Métadonnées
+LABEL maintainer="email-agent"
+LABEL description="Email Agent AI - Worker Service"
+
+# Variables d'environnement
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Installer les dépendances système
+RUN apt-get update && apt-get install -y \
+    gcc \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Créer le répertoire de travail
+WORKDIR /app
+
+# Copier les fichiers de requirements
+COPY requirements.txt .
+
+# Installer les dépendances Python
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copier le code de l'application
+COPY api/ ./api/
+COPY worker/ ./worker/
+COPY shared/ ./shared/
+
+# Créer les répertoires nécessaires
+RUN mkdir -p /app/logs /app/data
+
+# La commande sera spécifiée dans docker-compose.yml
+# Pour le worker : celery -A worker.celery_app worker --loglevel=info
+# Pour le beat : celery -A worker.celery_app beat --loglevel=info

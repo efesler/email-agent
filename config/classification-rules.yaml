@@ -1,0 +1,139 @@
+# =============================================================================
+# Email Agent - Règles de classification personnalisées
+# =============================================================================
+# Ce fichier permet de définir des règles de pré-classification avant
+# l'analyse par le LLM. Les règles sont appliquées dans l'ordre de priorité.
+
+# Structure d'une règle:
+# - name: Nom de la règle
+#   priority: Priorité (plus haut = plus prioritaire)
+#   conditions: Conditions à remplir (toutes doivent être vraies)
+#   action: Action à effectuer
+#   category: Catégorie cible
+#   folder: Dossier de destination (optionnel)
+
+rules:
+  # Factures - Priorité haute
+  - name: "Factures identifiées"
+    priority: 100
+    conditions:
+      - type: attachment_name
+        contains: ["facture", "invoice", "bill"]
+      - type: sender_domain
+        not_in: ["noreply", "notifications"]
+    action: archive
+    category: invoice
+    folder: "Finances/Factures"
+    
+  # Reçus
+  - name: "Reçus de paiement"
+    priority: 90
+    conditions:
+      - type: subject
+        contains: ["reçu", "receipt", "payment confirmation"]
+      - type: body
+        contains: ["montant", "amount", "€", "$"]
+    action: archive
+    category: receipt
+    folder: "Finances/Reçus"
+  
+  # Documents partagés
+  - name: "Google Drive"
+    priority: 80
+    conditions:
+      - type: sender
+        equals: "drive-shares-noreply@google.com"
+    action: archive
+    category: document
+    folder: "Professionnel/Documents partagés"
+    
+  - name: "Dropbox"
+    priority: 80
+    conditions:
+      - type: body
+        contains: ["dropbox.com/s/", "dropbox shared"]
+    action: archive
+    category: document
+    folder: "Professionnel/Documents partagés"
+  
+  # Promotions - Auto-delete
+  - name: "Marketing emails"
+    priority: 70
+    conditions:
+      - type: header
+        key: "List-Unsubscribe"
+        exists: true
+      - type: body
+        contains: ["unsubscribe", "se désabonner"]
+    action: delete
+    category: promotion
+    
+  - name: "Promotions commerce"
+    priority: 70
+    conditions:
+      - type: subject
+        contains: ["%", "promo", "soldes", "offre", "réduction"]
+    action: delete
+    category: promotion
+  
+  # Réseaux sociaux
+  - name: "LinkedIn"
+    priority: 60
+    conditions:
+      - type: sender_domain
+        equals: "linkedin.com"
+    action: delete
+    category: social
+    
+  - name: "Facebook"
+    priority: 60
+    conditions:
+      - type: sender_domain
+        in: ["facebook.com", "facebookmail.com"]
+    action: delete
+    category: social
+  
+  # Newsletters
+  - name: "Newsletters tech"
+    priority: 50
+    conditions:
+      - type: sender
+        contains: ["newsletter", "digest"]
+      - type: subject
+        not_contains: ["urgent", "important"]
+    action: archive
+    category: newsletter
+    folder: "Professionnel/Veille & Newsletters"
+  
+  # Domaines professionnels connus
+  - name: "Clients prioritaires"
+    priority: 90
+    conditions:
+      - type: sender_domain
+        in: ["important-client.com", "vip-partner.be"]
+    action: archive
+    category: professional
+    folder: "Professionnel/Clients VIP"
+    
+  # Spam évident
+  - name: "Spam patterns"
+    priority: 100
+    conditions:
+      - type: subject
+        regex: ".*\\b(viagra|casino|lottery|prince)\\b.*"
+    action: delete
+    category: spam
+
+# Configuration globale
+settings:
+  # Appliquer les règles avant le LLM (plus rapide)
+  pre_llm_rules: true
+  
+  # Si aucune règle ne matche, utiliser le LLM
+  fallback_to_llm: true
+  
+  # Seuil de confiance minimum pour appliquer une règle
+  min_confidence: 70
+  
+  # Logger les décisions de classification
+  log_decisions: true

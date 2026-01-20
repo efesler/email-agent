@@ -1,0 +1,116 @@
+version: '3.8'
+
+# Configuration pour développement local
+# Usage: docker-compose -f docker-compose.dev.yml up
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://emailagent:dev123@db:5432/emailagent
+      - REDIS_URL=redis://redis:6379/0
+      - OLLAMA_HOST=http://ollama:11434
+      - SECRET_KEY=dev-secret-key-change-in-production
+      - ENCRYPTION_KEY=dev-encryption-key-change-in-production
+      - ENVIRONMENT=development
+      - DEBUG=true
+    depends_on:
+      - db
+      - redis
+      - ollama
+    volumes:
+      # Mount code for live reload
+      - ./api:/app/api
+      - ./shared:/app/shared
+      - ./logs:/app/logs
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - email-agent-dev
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.worker
+    environment:
+      - DATABASE_URL=postgresql://emailagent:dev123@db:5432/emailagent
+      - REDIS_URL=redis://redis:6379/0
+      - OLLAMA_HOST=http://ollama:11434
+      - SECRET_KEY=dev-secret-key-change-in-production
+      - ENCRYPTION_KEY=dev-encryption-key-change-in-production
+    depends_on:
+      - db
+      - redis
+      - ollama
+    volumes:
+      - ./worker:/app/worker
+      - ./shared:/app/shared
+      - ./logs:/app/logs
+    command: celery -A worker.celery_app worker --loglevel=debug --concurrency=1
+    networks:
+      - email-agent-dev
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=emailagent
+      - POSTGRES_USER=emailagent
+      - POSTGRES_PASSWORD=dev123
+    ports:
+      - "5432:5432"  # Exposé pour accès local
+    volumes:
+      - pgdata_dev:/var/lib/postgresql/data
+    networks:
+      - email-agent-dev
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"  # Exposé pour accès local
+    volumes:
+      - redisdata_dev:/data
+    networks:
+      - email-agent-dev
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"  # Exposé pour tests locaux
+    volumes:
+      - ollama_data_dev:/root/.ollama
+    networks:
+      - email-agent-dev
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+
+  # Adminer pour gérer la DB facilement
+  adminer:
+    image: adminer
+    ports:
+      - "8080:8080"
+    networks:
+      - email-agent-dev
+
+  # Redis Commander pour voir Redis
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    ports:
+      - "8081:8081"
+    networks:
+      - email-agent-dev
+
+volumes:
+  pgdata_dev:
+  redisdata_dev:
+  ollama_data_dev:
+
+networks:
+  email-agent-dev:
+    driver: bridge

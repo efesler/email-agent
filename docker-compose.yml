@@ -1,0 +1,188 @@
+version: '3.8'
+
+services:
+  # API FastAPI
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    container_name: email-agent-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://emailagent:${DB_PASSWORD:-emailagent123}@db:5432/emailagent
+      - REDIS_URL=redis://redis:6379/0
+      - OLLAMA_HOST=http://ollama:11434
+      - SECRET_KEY=${SECRET_KEY}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - ENVIRONMENT=production
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    networks:
+      - email-agent-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Celery Worker pour traitement asynchrone
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.worker
+    container_name: email-agent-worker
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://emailagent:${DB_PASSWORD:-emailagent123}@db:5432/emailagent
+      - REDIS_URL=redis://redis:6379/0
+      - OLLAMA_HOST=http://ollama:11434
+      - SECRET_KEY=${SECRET_KEY}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+    depends_on:
+      - db
+      - redis
+      - ollama
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    networks:
+      - email-agent-network
+    command: celery -A worker.celery_app worker --loglevel=info --concurrency=2
+
+  # Celery Beat pour tâches planifiées (polling emails)
+  scheduler:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.worker
+    container_name: email-agent-scheduler
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://emailagent:${DB_PASSWORD:-emailagent123}@db:5432/emailagent
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY}
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - email-agent-network
+    command: celery -A worker.celery_app beat --loglevel=info
+
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: email-agent-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=emailagent
+      - POSTGRES_USER=emailagent
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-emailagent123}
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - email-agent-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U emailagent"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis pour queue et cache
+  redis:
+    image: redis:7-alpine
+    container_name: email-agent-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis123}
+    volumes:
+      - redisdata:/data
+    networks:
+      - email-agent-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Ollama pour LLM local
+  ollama:
+    image: ollama/ollama:latest
+    container_name: email-agent-ollama
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - email-agent-network
+    deploy:
+      resources:
+        limits:
+          memory: 10G
+        reservations:
+          memory: 6G
+    # Après le premier démarrage, exécuter:
+    # docker-compose exec ollama ollama pull mistral
+
+  # Nginx reverse proxy
+  nginx:
+    image: nginx:alpine
+    container_name: email-agent-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./config/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./config/nginx-site.conf:/etc/nginx/conf.d/default.conf:ro
+      - nginx_logs:/var/log/nginx
+      - certbot_data:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    depends_on:
+      - api
+    networks:
+      - email-agent-network
+    command: "/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"
+
+  # Portainer pour gestion Docker (optionnel mais recommandé)
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: email-agent-portainer
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    networks:
+      - email-agent-network
+
+volumes:
+  pgdata:
+    driver: local
+  redisdata:
+    driver: local
+  ollama_data:
+    driver: local
+  nginx_logs:
+    driver: local
+  certbot_data:
+    driver: local
+  certbot_www:
+    driver: local
+  portainer_data:
+    driver: local
+
+networks:
+  email-agent-network:
+    driver: bridge
