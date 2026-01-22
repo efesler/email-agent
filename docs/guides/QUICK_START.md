@@ -220,7 +220,7 @@ docker-compose exec db psql -U emailagent -d emailagent -c "SELECT COUNT(*) FROM
 ## Documentation complète
 
 - 📘 [Architecture et développement](../CLAUDE.md)
-- 📧 [Guide détaillé : Ajouter un compte email](AJOUTER_COMPTE_EMAIL.md)
+- 📧 [Guide détaillé : Ajouter un compte email](ADD_EMAIL_ACCOUNT.md)
 - 🔧 [Configuration avancée](../README.md)
 
 ---

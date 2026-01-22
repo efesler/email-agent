@@ -377,7 +377,7 @@ docker-compose exec ollama ollama list
 ## 📚 Documentation complète
 
 - 📘 [Guide développeur complet](CLAUDE.md)
-- 📧 [Guide détaillé comptes email](docs/AJOUTER_COMPTE_EMAIL.md)
+- 📧 [Guide détaillé comptes email](ADD_EMAIL_ACCOUNT.md)
 - 🚀 [Démarrage rapide](docs/QUICK_START.md)
 - 📊 [Guide de référence](GUIDE_RAPIDE.md)
 

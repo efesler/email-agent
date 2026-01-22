@@ -152,12 +152,25 @@ async def apply_classification_action(
                 }
 
             # Build email data for rule matching
+            # Load attachment names if email has attachments
+            attachment_names = []
+            if email.has_attachments:
+                from api.models import EmailAttachment
+                from sqlalchemy import select
+
+                attachments_query = select(EmailAttachment).where(
+                    EmailAttachment.email_id == email_id
+                )
+                attachments_result = await db.execute(attachments_query)
+                attachments = attachments_result.scalars().all()
+                attachment_names = [att.filename for att in attachments if att.filename]
+
             email_data = {
                 'subject': email.subject,
                 'sender': email.sender,
                 'body_preview': email.body_preview,
                 'has_attachments': email.has_attachments,
-                'attachment_names': []  # TODO: Load from attachments table if needed
+                'attachment_names': attachment_names
             }
 
             # Find matching rule

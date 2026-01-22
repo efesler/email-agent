@@ -144,7 +144,7 @@ Vérifier l'état de santé du système.
 
 ## 📚 Documentation
 
-- [Guide complet : Ajouter un compte](../docs/AJOUTER_COMPTE_EMAIL.md)
+- [Guide complet : Ajouter un compte](../docs/ADD_EMAIL_ACCOUNT.md)
 - [Démarrage rapide](../docs/QUICK_START.md)
 - [Architecture complète](../CLAUDE.md)
 

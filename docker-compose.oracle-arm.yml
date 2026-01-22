@@ -1,0 +1,385 @@
+# Docker Compose optimisé pour Oracle Cloud ARM Free Tier
+# Architecture: ARM64 (Ampere A1)
+# Ressources: 24 GB RAM, 4 OCPUs, 200 GB Storage
+# Usage: docker-compose -f docker-compose.oracle-arm.yml up -d
+
+services:
+  # API FastAPI
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+      platforms:
+        - linux/arm64
+    container_name: email-agent-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://emailagent:${DB_PASSWORD:-emailagent123}@db:5432/emailagent
+      - REDIS_URL=redis://redis:6379/0
+      - OLLAMA_HOST=http://ollama:11434
+      - SECRET_KEY=${SECRET_KEY}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - ENVIRONMENT=production
+      - ARM_OPTIMIZED=true
+      - LOG_LEVEL=INFO
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    networks:
+      - email-agent-network
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1'
+        reservations:
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Celery Workers - 4 workers pour 4 cores ARM
+  worker-1:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.worker
+      platforms:
+        - linux/arm64
+    container_name: email-agent-worker-1
+    restart: unless-stopped
+    hostname: worker-1
+    environment:
+      - DATABASE_URL=postgresql://emailagent:${DB_PASSWORD:-emailagent123}@db:5432/emailagent
+      - REDIS_URL=redis://redis:6379/0
+      - OLLAMA_HOST=http://ollama:11434
+      - SECRET_KEY=${SECRET_KEY}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - ARM_OPTIMIZED=true
+      - WORKER_NAME=worker-1
+    depends_on:
+      - db
+      - redis
+      - ollama
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    networks:
+      - email-agent-network
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1'
+        reservations:
+          memory: 512M
+    command: celery -A worker.celery_app worker --loglevel=info --concurrency=1 --hostname=worker-1@%h
+
+  worker-2:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.worker
+      platforms:
+        - linux/arm64
+    container_name: email-agent-worker-2
+    restart: unless-stopped
+    hostname: worker-2
+    environment:
+      - DATABASE_URL=postgresql://emailagent:${DB_PASSWORD:-emailagent123}@db:5432/emailagent
+      - REDIS_URL=redis://redis:6379/0
+      - OLLAMA_HOST=http://ollama:11434
+      - SECRET_KEY=${SECRET_KEY}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - ARM_OPTIMIZED=true
+      - WORKER_NAME=worker-2
+    depends_on:
+      - db
+      - redis
+      - ollama
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    networks:
+      - email-agent-network
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1'
+        reservations:
+          memory: 512M
+    command: celery -A worker.celery_app worker --loglevel=info --concurrency=1 --hostname=worker-2@%h
+
+  worker-3:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.worker
+      platforms:
+        - linux/arm64
+    container_name: email-agent-worker-3
+    restart: unless-stopped
+    hostname: worker-3
+    environment:
+      - DATABASE_URL=postgresql://emailagent:${DB_PASSWORD:-emailagent123}@db:5432/emailagent
+      - REDIS_URL=redis://redis:6379/0
+      - OLLAMA_HOST=http://ollama:11434
+      - SECRET_KEY=${SECRET_KEY}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - ARM_OPTIMIZED=true
+      - WORKER_NAME=worker-3
+    depends_on:
+      - db
+      - redis
+      - ollama
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    networks:
+      - email-agent-network
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1'
+        reservations:
+          memory: 512M
+    command: celery -A worker.celery_app worker --loglevel=info --concurrency=1 --hostname=worker-3@%h
+
+  worker-4:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.worker
+      platforms:
+        - linux/arm64
+    container_name: email-agent-worker-4
+    restart: unless-stopped
+    hostname: worker-4
+    environment:
+      - DATABASE_URL=postgresql://emailagent:${DB_PASSWORD:-emailagent123}@db:5432/emailagent
+      - REDIS_URL=redis://redis:6379/0
+      - OLLAMA_HOST=http://ollama:11434
+      - SECRET_KEY=${SECRET_KEY}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - ARM_OPTIMIZED=true
+      - WORKER_NAME=worker-4
+    depends_on:
+      - db
+      - redis
+      - ollama
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    networks:
+      - email-agent-network
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1'
+        reservations:
+          memory: 512M
+    command: celery -A worker.celery_app worker --loglevel=info --concurrency=1 --hostname=worker-4@%h
+
+  # Celery Beat Scheduler
+  scheduler:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.worker
+      platforms:
+        - linux/arm64
+    container_name: email-agent-scheduler
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://emailagent:${DB_PASSWORD:-emailagent123}@db:5432/emailagent
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - email-agent-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+    command: celery -A worker.celery_app beat --loglevel=info
+
+  # PostgreSQL Database - Optimisé pour ARM
+  db:
+    image: postgres:15-alpine
+    platform: linux/arm64
+    container_name: email-agent-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=emailagent
+      - POSTGRES_USER=emailagent
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-emailagent123}
+      - PGDATA=/var/lib/postgresql/data/pgdata
+      # Optimisations PostgreSQL pour 24GB RAM ARM
+      - POSTGRES_SHARED_BUFFERS=2GB
+      - POSTGRES_EFFECTIVE_CACHE_SIZE=6GB
+      - POSTGRES_MAINTENANCE_WORK_MEM=512MB
+      - POSTGRES_CHECKPOINT_COMPLETION_TARGET=0.9
+      - POSTGRES_WAL_BUFFERS=16MB
+      - POSTGRES_DEFAULT_STATISTICS_TARGET=100
+      - POSTGRES_RANDOM_PAGE_COST=1.1
+      - POSTGRES_EFFECTIVE_IO_CONCURRENCY=200
+      - POSTGRES_WORK_MEM=64MB
+      - POSTGRES_MIN_WAL_SIZE=1GB
+      - POSTGRES_MAX_WAL_SIZE=4GB
+      - POSTGRES_MAX_WORKER_PROCESSES=4
+      - POSTGRES_MAX_PARALLEL_WORKERS_PER_GATHER=2
+      - POSTGRES_MAX_PARALLEL_WORKERS=4
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./config/postgresql-arm.conf:/etc/postgresql/postgresql.conf:ro
+    networks:
+      - email-agent-network
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2'
+        reservations:
+          memory: 2G
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U emailagent"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis - Cache et Queue
+  redis:
+    image: redis:7-alpine
+    platform: linux/arm64
+    container_name: email-agent-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis123} --maxmemory 2gb --maxmemory-policy allkeys-lru
+    volumes:
+      - redisdata:/data
+    networks:
+      - email-agent-network
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1'
+        reservations:
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Ollama LLM - Optimisé pour ARM avec Mistral
+  ollama:
+    image: ollama/ollama:latest
+    platform: linux/arm64
+    container_name: email-agent-ollama
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - email-agent-network
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+          cpus: '2'
+        reservations:
+          memory: 6G
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+      - OLLAMA_ORIGINS=*
+      - OLLAMA_NUM_PARALLEL=2
+      - OLLAMA_MAX_LOADED_MODELS=1
+      - OLLAMA_KEEP_ALIVE=30m
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    platform: linux/arm64
+    container_name: email-agent-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./config/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./config/nginx-site.conf:/etc/nginx/conf.d/default.conf:ro
+      - nginx_logs:/var/log/nginx
+      - certbot_data:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    depends_on:
+      - api
+    networks:
+      - email-agent-network
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+    command: "/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"
+
+  # Portainer pour gestion Docker (optionnel)
+  portainer:
+    image: portainer/portainer-ce:latest
+    platform: linux/arm64
+    container_name: email-agent-portainer
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    networks:
+      - email-agent-network
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+
+volumes:
+  pgdata:
+    driver: local
+  redisdata:
+    driver: local
+  ollama_data:
+    driver: local
+  nginx_logs:
+    driver: local
+  certbot_data:
+    driver: local
+  certbot_www:
+    driver: local
+  portainer_data:
+    driver: local
+
+networks:
+  email-agent-network:
+    driver: bridge
+    driver_opts:
+      com.docker.network.driver.mtu: 1500

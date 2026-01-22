@@ -2,6 +2,7 @@
 Utilitaires de sécurité
 """
 from cryptography.fernet import Fernet
+from passlib.context import CryptContext
 from shared.config import settings
 import base64
 import json
@@ -9,6 +10,9 @@ import logging
 from typing import Dict, Any
 
 logger = logging.getLogger(__name__)
+
+# Password hashing context
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def _get_fernet() -> Fernet:
     """Récupère l'instance Fernet configurée"""
@@ -97,3 +101,30 @@ def decrypt_credentials(encrypted_credentials: str) -> Dict[str, Any]:
     except json.JSONDecodeError as e:
         logger.error(f"Failed to parse credentials JSON: {e}")
         raise ValueError("Invalid credentials format")
+
+
+def hash_password(password: str) -> str:
+    """
+    Hash un mot de passe avec bcrypt.
+
+    Args:
+        password: Mot de passe en clair
+
+    Returns:
+        Hash bcrypt du mot de passe
+    """
+    return pwd_context.hash(password)
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """
+    Vérifie qu'un mot de passe correspond au hash.
+
+    Args:
+        plain_password: Mot de passe en clair à vérifier
+        hashed_password: Hash bcrypt stocké en DB
+
+    Returns:
+        True si le mot de passe correspond, False sinon
+    """
+    return pwd_context.verify(plain_password, hashed_password)
